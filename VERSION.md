@@ -39,6 +39,16 @@ This release establishes the core ACF editor workflow for:
 
 Users can now build, organize, edit, diagnose, and prepare complete blockout-based level layouts inside Unity using a single integrated ACF workflow.
 
+## Next Phase
+
+The next core phase is tracked in:
+
+- [NEXT_UPDATE_ROADMAP.md](D:/Unity%20Project/Atlas-Cathedral-Forge-ACF-/NEXT_UPDATE_ROADMAP.md)
+
+The planned optional UI/runtime map extension is tracked separately in:
+
+- [MAP_EXTENSION_ROADMAP.md](D:/Unity%20Project/Atlas-Cathedral-Forge-ACF-/MAP_EXTENSION_ROADMAP.md)
+
 ## Author
 
 RAZ

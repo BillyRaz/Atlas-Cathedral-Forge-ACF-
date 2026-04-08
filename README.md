@@ -138,6 +138,11 @@ These controls affect generated blockout objects only, not hand-placed scene obj
 
 This version is considered the completed core ACF workflow. Future work can focus on improvements, refinements, and additional tooling rather than missing foundation features.
 
+## Next Roadmaps
+
+- Core structural roadmap: [NEXT_UPDATE_ROADMAP.md](D:/Unity%20Project/Atlas-Cathedral-Forge-ACF-/NEXT_UPDATE_ROADMAP.md)
+- Optional map extension roadmap: [MAP_EXTENSION_ROADMAP.md](D:/Unity%20Project/Atlas-Cathedral-Forge-ACF-/MAP_EXTENSION_ROADMAP.md)
+
 ## Author
 
 RAZ
