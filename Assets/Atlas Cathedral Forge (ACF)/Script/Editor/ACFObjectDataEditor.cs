@@ -1,5 +1,5 @@
-using UnityEngine;
 using UnityEditor;
+using UnityEngine;
 
 namespace ACFSystem
 {
@@ -20,7 +20,6 @@ namespace ACFSystem
             EditorGUILayout.LabelField("ACF Object Data", EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
-            // Category selection
             EditorGUILayout.PropertyField(serializedObject.FindProperty("category"));
 
             if (data.category == ACFObjectData.ObjectCategory.Custom)
@@ -29,30 +28,22 @@ namespace ACFSystem
             }
 
             EditorGUILayout.Space();
-
-            // Blockout settings
             EditorGUILayout.LabelField("Blockout Settings", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("blockoutType"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("isBlockout"));
 
             EditorGUILayout.Space();
-
-            // Replacement settings
             EditorGUILayout.LabelField("Replacement Settings", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("finalPrefab"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("preserveTransform"));
 
             EditorGUILayout.Space();
-
-            // Notes
             EditorGUILayout.LabelField("Diagnostic Notes", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("notes"));
 
             serializedObject.ApplyModifiedProperties();
 
             EditorGUILayout.Space();
-
-            // Quick actions
             EditorGUILayout.LabelField("Quick Actions", EditorStyles.boldLabel);
 
             if (GUILayout.Button("Mark as Blockout"))
@@ -61,16 +52,20 @@ namespace ACFSystem
                 EditorUtility.SetDirty(data);
             }
 
-            if (GUILayout.Button("Set Category from Name"))
+            if (GUILayout.Button("Set Category from Name") && ACFCategoryUtility.TryInferCategory(data.gameObject, out string category))
             {
-                string name = data.gameObject.name.ToLower();
-                if (name.Contains("floor")) data.category = ACFObjectData.ObjectCategory.Floor;
-                else if (name.Contains("wall")) data.category = ACFObjectData.ObjectCategory.Wall;
-                else if (name.Contains("prop")) data.category = ACFObjectData.ObjectCategory.Prop;
-                else if (name.Contains("movable")) data.category = ACFObjectData.ObjectCategory.MovableProp;
-                else if (name.Contains("key")) data.category = ACFObjectData.ObjectCategory.Key;
-                else if (name.Contains("door")) data.category = ACFObjectData.ObjectCategory.Door;
-                else if (name.Contains("roof")) data.category = ACFObjectData.ObjectCategory.Roof;
+                switch (category)
+                {
+                    case ACFCategoryUtility.Floor: data.category = ACFObjectData.ObjectCategory.Floor; break;
+                    case ACFCategoryUtility.Wall: data.category = ACFObjectData.ObjectCategory.Wall; break;
+                    case ACFCategoryUtility.Roof: data.category = ACFObjectData.ObjectCategory.Roof; break;
+                    case ACFCategoryUtility.Prop: data.category = ACFObjectData.ObjectCategory.Prop; break;
+                    case ACFCategoryUtility.MovableProp: data.category = ACFObjectData.ObjectCategory.MovableProp; break;
+                    case ACFCategoryUtility.Door: data.category = ACFObjectData.ObjectCategory.Door; break;
+                    case ACFCategoryUtility.Key: data.category = ACFObjectData.ObjectCategory.Key; break;
+                    case ACFCategoryUtility.Landmark: data.category = ACFObjectData.ObjectCategory.Landmark; break;
+                    case ACFCategoryUtility.Ignore: data.category = ACFObjectData.ObjectCategory.Ignore; break;
+                }
 
                 EditorUtility.SetDirty(data);
             }

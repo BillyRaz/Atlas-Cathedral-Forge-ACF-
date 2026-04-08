@@ -14,6 +14,8 @@ namespace ACFSystem
             Key,
             Door,
             Roof,
+            Landmark,
+            Ignore,
             Custom
         }
 
@@ -29,6 +31,10 @@ namespace ACFSystem
         public GameObject finalPrefab;
         public bool preserveTransform = true;
 
+        [Header("Transform Presets")]
+        public bool snapToGrid = false;
+        public float gridSize = 1f;
+
         [Header("Diagnostic Info")]
         [TextArea(3, 5)]
         public string notes = "";
@@ -38,7 +44,7 @@ namespace ACFSystem
             if (isBlockout && finalPrefab != null)
             {
                 // Flag for replacement in final stage
-                gameObject.tag = "Blockout";
+                gameObject.tag = ACFCategoryUtility.Blockout;
             }
         }
 
@@ -47,21 +53,38 @@ namespace ACFSystem
             // Draw category color indicator
             Gizmos.color = GetCategoryColor();
             Gizmos.DrawWireCube(transform.position, transform.lossyScale);
+
+            // Draw pivot point
+            Gizmos.color = Color.red;
+            Gizmos.DrawSphere(transform.position, 0.1f);
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (isBlockout)
+            {
+                Gizmos.color = new Color(1f, 0.5f, 0f, 0.3f);
+                Gizmos.DrawCube(transform.position, transform.lossyScale);
+            }
         }
 
         private Color GetCategoryColor()
         {
-            switch (category)
+            return ACFCategoryUtility.GetCategoryColor(ACFCategoryUtility.GetCategoryName(category, customCategory));
+        }
+
+        public void SnapToGrid()
+        {
+            if (!snapToGrid || gridSize <= 0f)
             {
-                case ObjectCategory.Floor: return Color.green;
-                case ObjectCategory.Wall: return Color.blue;
-                case ObjectCategory.Prop: return Color.yellow;
-                case ObjectCategory.MovableProp: return Color.cyan;
-                case ObjectCategory.Key: return Color.magenta;
-                case ObjectCategory.Door: return Color.red;
-                case ObjectCategory.Roof: return Color.gray;
-                default: return Color.white;
+                return;
             }
+
+            Vector3 pos = transform.position;
+            pos.x = Mathf.Round(pos.x / gridSize) * gridSize;
+            pos.y = Mathf.Round(pos.y / gridSize) * gridSize;
+            pos.z = Mathf.Round(pos.z / gridSize) * gridSize;
+            transform.position = pos;
         }
     }
 }
