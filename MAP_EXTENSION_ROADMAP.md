@@ -1,16 +1,44 @@
 # ACF Map Extension Roadmap
 
-## Purpose
+## ACF Map Extension - Optional Runtime UI Layer
 
-This roadmap covers a future optional extension for ACF that generates a clean runtime map and menu map from ACF layout data.
+### Overview
 
-This is not part of the current ACF core.
+The ACF Map Extension is a future optional module built on top of ACF core data.
 
-The map system should remain a separate extension layer so the main blockout and building workflow stays focused and lightweight.
+It should not be merged into the core blockout and structural workflow. Instead, it should sit above ACF as a clean runtime and UI layer that reads the level information ACF already produces.
 
-## Why It Fits ACF
+This extension is meant to support:
 
-ACF already owns the correct source data:
+- full-screen map screens
+- optional minimap support
+- room discovery
+- door and key state tracking
+- RE-style room status flow
+- clean menu-first UI
+
+The goal is to move from:
+
+> "ACF builds the level"
+
+to:
+
+> "ACF also provides the data layer for readable, optional runtime navigation UI"
+
+---
+
+## Core Design Principles
+
+- ACF core remains **editor-first**
+- map systems remain **optional**
+- runtime map reads **ACF-authored structure data**
+- UI should be **clean, minimal, and intentional**
+
+---
+
+## Why This Fits ACF
+
+ACF already owns the right source data:
 
 - floor data
 - prop data
@@ -19,20 +47,22 @@ ACF already owns the correct source data:
 - category metadata
 - generated layout structure
 
-That means a map system would be a natural extension of ACF rather than an unrelated side feature.
+That means the future map system would not be a random side feature.
 
-The intended architecture is:
+It would be a natural extension layer with the following logic:
 
 - ACF builds the level
 - ACF understands the level
 - the map extension reads ACF data
 - runtime map state updates from ACF-linked objects
 
-## Extension Position
+---
 
-This system should be developed as a separate module, not mixed into the current ACF core.
+## Module Position
 
-Suggested module structure:
+This should be implemented as a separate module, not mixed into current ACF core.
+
+### Suggested Module Structure
 
 - `ACFMapDefinition`
 - `ACFMapRuntime`
@@ -41,18 +71,26 @@ Suggested module structure:
 - `ACFMapRenderer`
 - `ACFMapSpritePalette`
 
-Benefits:
+### Benefits
 
-- ACF core stays clean
-- the map system stays optional
-- projects can disable it for minimal-UI builds
-- the runtime map can evolve independently from the editor blockout system
+- ACF core stays focused
+- map logic remains optional
+- minimal-UI builds can disable it completely
+- runtime map systems can evolve without destabilizing core editor tools
 
-## Core Design
+---
 
-### 1. Floors As The Base Map Layer
+## Feature Breakdown
 
-Floor data should define the main readable map layout.
+---
+
+### 1. Floor-Driven Map Layout
+
+#### Goal
+
+Use floor data as the main source for readable map structure.
+
+#### Features
 
 Each floor piece can provide:
 
@@ -60,16 +98,26 @@ Each floor piece can provide:
 - room type
 - floor subtype
 - floor ID
-- discovered or undiscovered state
+- discovered state
 - sprite override
 
-The map should be built from authored floor and room data, not from a screenshot-based approach.
+#### Benefits
 
-### 2. Props And Doors As Markers
+- map layout is authored, not guessed
+- rooms and corridor shapes stay consistent with ACF blockout
+- supports upper-floor and mask-floor workflows later
 
-Props should only appear on the map when they are gameplay-important.
+---
 
-Examples:
+### 2. Prop And Door Marker System
+
+#### Goal
+
+Use gameplay-relevant objects as selective map markers instead of showing every object.
+
+#### Features
+
+Only important objects should appear:
 
 - save point
 - merchant
@@ -80,75 +128,110 @@ Examples:
 - ladder
 - puzzle object
 
-This keeps the map readable and avoids icon noise.
+#### Benefits
 
-### 3. Key Data Drives Door State
+- keeps the map clean
+- avoids icon clutter
+- supports atmospheric game presentation
 
-Because ACF already links keys and doors, the map extension can display meaningful runtime states.
+---
 
-Useful door states:
+### 3. Key And Door Runtime States
+
+#### Goal
+
+Use ACF key and door data to drive meaningful map feedback.
+
+#### Features
+
+Doors can expose states like:
 
 - locked
 - unlocked
 - opened
 - cleared
 
-This supports a strong survival-horror or exploration-style map flow.
+This works naturally because ACF already links keys and doors.
 
-### 4. Swappable Sprite Override
+#### Benefits
 
-The map system should not hardcode a single visual style.
+- supports survival-horror style navigation
+- gives the player useful progression feedback
+- makes ACF data more valuable at runtime
+
+---
+
+### 4. Swappable Sprite And Theme Overrides
+
+#### Goal
+
+Keep the map system style-flexible instead of hardcoding one visual look.
+
+#### Features
 
 Each room or map object should support:
 
 - default sprite
 - override sprite
 - icon override
-- palette or theme override
+- palette override
+- theme override
 
-This allows different visual themes without changing the runtime logic.
-
-Possible themes later:
+#### Example Themes
 
 - cathedral
 - crypt
 - mechanical lab
 - holy faction
 
-## UI Philosophy
+#### Benefits
 
-The map should exist as a tool, not as visual noise.
+- one system supports multiple visual identities
+- style can change without changing map logic
+- future projects stay reusable
 
-This fits a minimal UI game direction much better than a constant HUD-heavy design.
+---
 
-### During Gameplay
+### 5. Minimal UI Philosophy
 
-Keep the screen mostly clean.
+#### Goal
 
-Only show critical UI when needed:
+Keep map UI useful without cluttering gameplay presentation.
+
+#### Runtime Direction
+
+During gameplay, only show UI when truly necessary:
 
 - health if needed
 - boss bar if needed
 - interaction prompts if needed
-- important status or damage feedback
+- key status or critical state feedback if needed
 
-### In Menus
+#### Menu Direction
 
-Open a clean map and inventory interface through a simple one-click menu flow.
-
-Examples:
+The main map should open through a clean one-click menu flow such as:
 
 - map
 - inventory
 - notes
 - keys
-- objective info
+- objective view
 
-This supports a moody and atmospheric presentation without clutter.
+#### Benefits
 
-## Recommended Runtime Layering
+- supports immersion
+- avoids cheap-looking HUD noise
+- fits moody atmospheric game design
 
-### Layer 1: Data Layer
+---
+
+### 6. Three-Layer Runtime Architecture
+
+#### Goal
+
+Keep the extension stable by separating source data, runtime state, and rendering.
+
+#### Layer 1: Data Layer
 
 Pure ACF-driven data:
 
@@ -159,39 +242,49 @@ Pure ACF-driven data:
 - props
 - stairs
 - connections
-- category or subtype states
+- categories and subtypes
 
-### Layer 2: Runtime State Layer
+#### Layer 2: Runtime State Layer
 
-Tracks live progression:
+Tracks progression:
 
 - discovered rooms
 - unlocked doors
 - collected key items
-- cleared rooms
 - solved interactions
+- cleared rooms
 - player location
 
-### Layer 3: UI Render Layer
+#### Layer 3: UI Render Layer
 
-Draws the final output to:
+Draws the result to:
 
 - canvas map
-- pause or menu map
+- pause/menu map
 - optional minimap
 
-This separation will keep the extension maintainable and flexible.
+#### Benefits
 
-## RE-Style Tracking Targets
+- easier debugging
+- cleaner code ownership
+- easier optional feature support
 
-### Room States
+---
+
+### 7. RE-Style Room Tracking
+
+#### Goal
+
+Support a readable room-status system similar to survival-horror map design.
+
+#### Room States
 
 - hidden
 - discovered
 - uncleared
 - cleared
 
-### Door States
+#### Door States
 
 - unknown
 - visible
@@ -199,14 +292,14 @@ This separation will keep the extension maintainable and flexible.
 - unlocked
 - opened
 
-### Item And Prop States
+#### Item And Prop States
 
 - available
 - collected
 - solved
 - inactive
 
-### Special Markers
+#### Special Markers
 
 - save room
 - merchant
@@ -214,21 +307,31 @@ This separation will keep the extension maintainable and flexible.
 - boss room
 - puzzle room
 
+#### Benefits
+
+- clearer exploration flow
+- stronger progression readability
+- better support for key-and-door gameplay loops
+
+---
+
 ## Best Development Order
 
-This extension should not be built before the main ACF level-building workflow is fully proven in production use.
+This extension should not be built before ACF core is fully proven in active level production.
 
 Recommended order:
 
-1. finish using current ACF core in a real playable layout
-2. confirm floor, corridor, wall, roof, and stair-direction needs
-3. then build the map extension on top of stable ACF data
+1. finish building real content with current ACF core
+2. validate floor, wall, corridor, and structural workflows in production
+3. then build the map extension on top of stable data and metadata
 
-That keeps the map system grounded in real usage instead of speculation.
+This keeps the map system grounded in actual game needs instead of speculation.
 
-## Why The Current Layout Is A Good Test Case
+---
 
-The current cathedral-style layout is a strong future test bed for this system because it includes:
+## Why The Current Cathedral Layout Is A Strong Test Case
+
+The current layout is already a strong fit for a future ACF map system because it contains:
 
 - a central hub
 - side wings
@@ -239,7 +342,7 @@ The current cathedral-style layout is a strong future test bed for this system b
 - boss destination flow
 - optional risk and reward branches
 
-Possible future tagged spaces:
+### Example Future Map Tags
 
 - main hall nave as hub
 - west wing catacombs as side objective or puzzle branch
@@ -249,16 +352,43 @@ Possible future tagged spaces:
 - underground dungeon as risk and reward layer
 - ritual chamber as boss arena
 
-## Status
+This makes the current level a strong real-world test bed for the future map extension.
 
-This extension is planned but intentionally deferred.
+---
+
+## Recommended Scope
+
+To keep the first version realistic, the map extension should be built in this order:
+
+1. floor-driven map layout
+2. prop and door markers
+3. key and door runtime state
+4. menu map renderer
+5. optional minimap support
+6. sprite and theme override system
+
+---
+
+## Version Direction
+
+Suggested label:
+
+**ACF Map Extension V1 - Runtime Navigation Layer**
+
+---
+
+## Notes
+
+This extension is intentionally deferred.
 
 The current priority remains:
 
 - finish levels
-- validate ACF in active production
-- avoid overbuilding side systems too early
+- validate ACF in active production use
+- avoid overbuilding optional side systems too early
+
+The map should be treated as a tool, not as visual noise.
 
 ## Author Direction
 
-Map extension roadmap structured under the RAZ build direction as a future optional system layered on top of ACF core.
+Map extension roadmap structured under the RAZ build direction as a separate optional layer built on top of ACF core.
