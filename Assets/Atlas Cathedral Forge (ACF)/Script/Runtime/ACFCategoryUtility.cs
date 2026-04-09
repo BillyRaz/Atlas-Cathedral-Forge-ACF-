@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace ACFSystem
@@ -43,6 +44,7 @@ namespace ACFSystem
             { Landmark, new Color(0.2f, 0.3f, 0.8f) },
             { Ignore, new Color(0.3f, 0.3f, 0.3f) }
         };
+        private static readonly Dictionary<string, Regex> KeywordRegexCache = new Dictionary<string, Regex>(StringComparer.Ordinal);
 
         public static bool IsStandardCategory(string category)
         {
@@ -79,22 +81,17 @@ namespace ACFSystem
 
         public static bool TryInferCategory(GameObject gameObject, out string category)
         {
+            return TryInferCategory(gameObject, true, out category, out _);
+        }
+
+        public static bool TryInferCategory(GameObject gameObject, bool enableNameDetection, out string category, out string reason)
+        {
             category = string.Empty;
+            reason = string.Empty;
 
             if (gameObject == null)
             {
                 return false;
-            }
-
-            if (IsStandardCategory(gameObject.tag))
-            {
-                category = gameObject.tag;
-                return true;
-            }
-
-            if (TryInferCategoryFromName(gameObject.name, out category))
-            {
-                return true;
             }
 
             ACFObjectData objectData = gameObject.GetComponent<ACFObjectData>();
@@ -104,11 +101,29 @@ namespace ACFSystem
                 if (IsStandardCategory(objectDataCategory))
                 {
                     category = objectDataCategory;
+                    reason = "ACFObjectData";
                     return true;
                 }
             }
 
+            if (IsStandardCategory(gameObject.tag))
+            {
+                category = gameObject.tag;
+                reason = "Unity Tag";
+                return true;
+            }
+
+            if (enableNameDetection && TryInferCategoryFromName(gameObject.name, out category))
+            {
+                reason = "Name Detection";
+                return true;
+            }
+
             if (gameObject.GetComponent<Renderer>() != null) category = Prop;
+            if (!string.IsNullOrEmpty(category))
+            {
+                reason = "Renderable Fallback";
+            }
 
             return !string.IsNullOrEmpty(category);
         }
@@ -135,13 +150,29 @@ namespace ACFSystem
         {
             for (int i = 0; i < keywords.Length; i++)
             {
-                if (source.Contains(keywords[i]))
+                if (MatchesKeyword(source, keywords[i]))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static bool MatchesKeyword(string source, string keyword)
+        {
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(keyword))
+            {
+                return false;
+            }
+
+            if (!KeywordRegexCache.TryGetValue(keyword, out Regex regex))
+            {
+                regex = new Regex($@"(^|[^a-z0-9]){Regex.Escape(keyword)}([^a-z0-9]|$)", RegexOptions.Compiled);
+                KeywordRegexCache[keyword] = regex;
+            }
+
+            return regex.IsMatch(source);
         }
     }
 }

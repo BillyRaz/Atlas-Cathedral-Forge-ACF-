@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -54,6 +55,8 @@ namespace ACFSystem
         private Vector2 objectListScrollPos;
         private bool deepNameAnalysis = true;
         private bool suggestCategorization = true;
+        private bool enableNameBasedDetection = true;
+        private bool enableScanDebugOutput;
         private readonly bool[] categoryFoldouts = new bool[ACFCategoryUtility.AllCategories.Length];
         private bool showScanResults = true;
         private bool showDetailedObjects;
@@ -172,6 +175,13 @@ namespace ACFSystem
                 AutoCategorizeByName();
             }
             EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(10);
+            EditorGUILayout.BeginVertical("box");
+            enableNameBasedDetection = EditorGUILayout.Toggle("Enable Name Detection", enableNameBasedDetection);
+            enableScanDebugOutput = EditorGUILayout.Toggle("Scan Debug Output", enableScanDebugOutput);
+            EditorGUILayout.HelpBox("Priority order: ACFObjectData, Unity Tag, then optional name detection.", MessageType.None);
+            EditorGUILayout.EndVertical();
 
             GUILayout.Space(20);
             DrawQuickAssignButtons();
@@ -762,6 +772,7 @@ namespace ACFSystem
         {
             GameObject[] rootObjects = SceneManager.GetActiveScene().GetRootGameObjects();
             InitializeCategoryDictionary();
+            StringBuilder scanDebugBuilder = enableScanDebugOutput ? new StringBuilder("=== ACF Scan Debug ===\n") : null;
 
             foreach (GameObject rootObject in rootObjects)
             {
@@ -773,9 +784,13 @@ namespace ACFSystem
                         continue;
                     }
 
-                    if (ACFCategoryUtility.TryInferCategory(gameObject, out string category))
+                    if (ACFCategoryUtility.TryInferCategory(gameObject, enableNameBasedDetection, out string category, out string reason))
                     {
                         categorizedObjects[category].Add(gameObject);
+                        if (enableScanDebugOutput)
+                        {
+                            scanDebugBuilder.AppendLine($"{gameObject.name} -> {category} ({reason})");
+                        }
                     }
                 }
             }
@@ -784,6 +799,10 @@ namespace ACFSystem
             ApplyScanPreviewMaterials();
             scanCompleted = true;
             Debug.Log(BuildCategorySummary("ACF Scan Complete:"));
+            if (enableScanDebugOutput && scanDebugBuilder != null)
+            {
+                Debug.Log(scanDebugBuilder.ToString());
+            }
 
             int totalObjects = rootObjects.Sum(obj => obj.GetComponentsInChildren<Transform>(true).Length);
             EditorUtility.DisplayDialog("Scan Complete", $"Found {totalObjects} objects\n\nCategorized into {ACFCategoryUtility.AllCategories.Length} standard types", "OK");
@@ -791,6 +810,12 @@ namespace ACFSystem
 
         private void AutoCategorizeByName()
         {
+            if (!enableNameBasedDetection)
+            {
+                EditorUtility.DisplayDialog("Name Detection Disabled", "Enable name detection in the Scan tab before using auto-categorize by name.", "OK");
+                return;
+            }
+
             int categorizedCount = 0;
             GameObject[] rootObjects = SceneManager.GetActiveScene().GetRootGameObjects();
 
@@ -2714,28 +2739,8 @@ namespace ACFSystem
 
         private bool TrySuggestCategory(GameObject gameObject, out string category)
         {
-            if (ACFCategoryUtility.TryInferCategoryFromName(gameObject.name, out category))
+            if (enableNameBasedDetection && ACFCategoryUtility.TryInferCategoryFromName(gameObject.name, out category))
             {
-                return true;
-            }
-
-            Renderer renderer = gameObject.GetComponent<Renderer>();
-            if (renderer == null)
-            {
-                category = string.Empty;
-                return false;
-            }
-
-            Vector3 scale = gameObject.transform.localScale;
-            if (scale.y > 2f && scale.x < 1.5f && scale.z < 1.5f)
-            {
-                category = ACFCategoryUtility.Wall;
-                return true;
-            }
-
-            if (scale.y < 0.5f && (scale.x > 2f || scale.z > 2f))
-            {
-                category = ACFCategoryUtility.Floor;
                 return true;
             }
 
