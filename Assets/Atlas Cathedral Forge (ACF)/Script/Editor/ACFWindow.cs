@@ -2375,7 +2375,11 @@ namespace ACFSystem
 
             foreach (GameObject rootObject in rootObjects)
             {
-                if (rootObject == null || rootObject == organizerRoot || rootObject.GetComponent<Camera>() != null || rootObject.GetComponent<Light>() != null)
+                if (rootObject == null ||
+                    rootObject == organizerRoot ||
+                    rootObject.GetComponent<Camera>() != null ||
+                    rootObject.GetComponent<Light>() != null ||
+                    IsCanvasOrUiObject(rootObject))
                 {
                     continue;
                 }
@@ -2424,6 +2428,45 @@ namespace ACFSystem
             if (parent != null && parent.name == "ACF_Organized")
             {
                 return true;
+            }
+
+            if (IsCanvasOrUiObject(gameObject))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsCanvasOrUiObject(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                return false;
+            }
+
+            if (gameObject.GetComponent<RectTransform>() != null ||
+                gameObject.GetComponent<Canvas>() != null ||
+                gameObject.GetComponent<CanvasRenderer>() != null ||
+                gameObject.GetComponentInParent<Canvas>(true) != null)
+            {
+                return true;
+            }
+
+            Component[] components = gameObject.GetComponents<Component>();
+            for (int i = 0; i < components.Length; i++)
+            {
+                Component component = components[i];
+                if (component == null)
+                {
+                    continue;
+                }
+
+                System.Type componentType = component.GetType();
+                if (componentType.Namespace == "UnityEngine.UI" || componentType.Namespace == "UnityEngine.EventSystems")
+                {
+                    return true;
+                }
             }
 
             return false;
