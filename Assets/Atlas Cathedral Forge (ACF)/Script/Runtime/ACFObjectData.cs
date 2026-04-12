@@ -39,6 +39,12 @@ namespace ACFSystem
         [TextArea(3, 5)]
         public string notes = "";
 
+        [Header("Unity Sync")]
+        public string scannedUnityTag = "Untagged";
+        public string scannedUnityLayer = "Default";
+        public string assignedCategoryTag = "";
+        public string assignedCategoryLayer = "";
+
         private void Awake()
         {
             if (isBlockout && finalPrefab != null)
@@ -85,6 +91,19 @@ namespace ACFSystem
             pos.y = Mathf.Round(pos.y / gridSize) * gridSize;
             pos.z = Mathf.Round(pos.z / gridSize) * gridSize;
             transform.position = pos;
+        }
+
+        public void CaptureCurrentUnityMetadata()
+        {
+            scannedUnityTag = gameObject.tag;
+            string layerName = LayerMask.LayerToName(gameObject.layer);
+            scannedUnityLayer = string.IsNullOrWhiteSpace(layerName) ? gameObject.layer.ToString() : layerName;
+        }
+
+        public void RecordAssignedCategoryMetadata(string unityTag, string unityLayer)
+        {
+            assignedCategoryTag = unityTag ?? string.Empty;
+            assignedCategoryLayer = unityLayer ?? string.Empty;
         }
     }
 }

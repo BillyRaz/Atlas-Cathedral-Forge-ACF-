@@ -12,6 +12,10 @@ ACF Core Release
 
 Core Complete
 
+## Current Update
+
+Portable Door And Editor Upgrade
+
 ## Version Summary
 
 This release establishes the core ACF editor workflow for:
@@ -26,12 +30,22 @@ This release establishes the core ACF editor workflow for:
 - final prefab replacement
 - deep diagnosis and generation reporting
 
+The current update extends that core with:
+
+- portable door and key runtime support
+- shared key ring and pickup prompts
+- stronger floor snap alignment
+- key auto-setup from editor scan results
+- generated blockout material repair and consistency
+- Unity tag/layer sync metadata for categorized objects
+
 ## Included Systems
 
 - category utility system
 - object data metadata system
 - toolbar and editor helpers
 - key and door data linking
+- portable key pickup and key ring runtime
 - generated object visibility controls
 - roof-to-mask-floor conversion workflow
 

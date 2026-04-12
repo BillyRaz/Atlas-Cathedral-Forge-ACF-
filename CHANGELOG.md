@@ -1,5 +1,30 @@
 # Changelog
 
+## Portable Door And Editor Upgrade
+
+### Added
+
+- portable runtime door system with hinge pivots, push opening, obstacle checks, and lock/key support
+- portable key pickup flow with prompt UI and project-agnostic key ring support
+- reusable `ACFPlayerKeyRing`, door prompt UI, key prompt UI, and debug helper scripts
+- dedicated inspectors for `ACFDoorData` and `ACFKeyData`
+- generated opaque blockout material asset under `Assets/Atlas Cathedral Forge (ACF)/Generated`
+
+### Improved
+
+- `ACFWindow` scan flow now syncs detected categories back into `ACFObjectData`
+- `ACFWindow` can assign key data to detected key objects and auto-configure their runtime setup
+- floor edge snapping now aligns mixed-size floors more cleanly
+- generated blockouts, walls, roofs, and doors keep a shared opaque material
+- door generation now creates ACF-ready door placeholders with editable lock settings
+- scene organization skips UI-related roots more safely
+- `ACFObjectData` and its inspector now track scanned/assigned Unity tag and layer metadata
+
+### Notes
+
+- this update pulls in the tested non-player ACF improvements from the BabyMonster project while keeping the package reusable across future player implementations
+- the runtime now avoids hard dependencies on a project-specific player controller
+ 
 ## ACF Core Release
 
 ### Added

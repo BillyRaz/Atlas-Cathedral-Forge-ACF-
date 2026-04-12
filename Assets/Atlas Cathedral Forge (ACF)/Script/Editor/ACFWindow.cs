@@ -12,6 +12,8 @@ namespace ACFSystem
     {
         private const string CorridorFloorCustomCategory = "CorridorFloor";
         private const string MaskFloorCustomCategory = "MaskFloor";
+        private const string BlockoutMaterialFolder = "Assets/Atlas Cathedral Forge (ACF)/Generated";
+        private const string BlockoutMaterialPath = "Assets/Atlas Cathedral Forge (ACF)/Generated/ACF_BlockoutOpaque.mat";
 
         private enum Tab { Scan, Blockout, Floor, Walls, Edit, Final, Diagnose }
         private enum SelectionMode { All, ByCategory, Manual }
@@ -63,7 +65,6 @@ namespace ACFSystem
         private int blockoutCategoryIndex;
         private GameObject selectedBlockoutPrefab;
         private Material scanPreviewMaterial;
-        private float sourcePreviewOpacity = 0.5f;
         private float generatedWallHeight = 3f;
         private float generatedWallThickness = 0.25f;
         private float roofThickness = 0.2f;
@@ -176,14 +177,21 @@ namespace ACFSystem
             }
             EditorGUILayout.EndHorizontal();
 
-            GUILayout.Space(10);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Assign Key Data", GUILayout.Height(32)))
+            {
+                AssignKeyDataToDetectedObjects();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(20);
             EditorGUILayout.BeginVertical("box");
             enableNameBasedDetection = EditorGUILayout.Toggle("Enable Name Detection", enableNameBasedDetection);
             enableScanDebugOutput = EditorGUILayout.Toggle("Scan Debug Output", enableScanDebugOutput);
             EditorGUILayout.HelpBox("Priority order: ACFObjectData, Unity Tag, then optional name detection.", MessageType.None);
             EditorGUILayout.EndVertical();
 
-            GUILayout.Space(20);
+            GUILayout.Space(10);
             DrawQuickAssignButtons();
 
             if (!scanCompleted)
@@ -335,7 +343,7 @@ namespace ACFSystem
 
             GUILayout.Space(10);
             EditorGUILayout.LabelField("Layout Helpers", EditorStyles.boldLabel);
-            sourcePreviewOpacity = EditorGUILayout.Slider("Scene Opacity", sourcePreviewOpacity, 0.1f, 1f);
+            EditorGUILayout.LabelField("Scene Opacity", "Disabled");
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Link Key To Doors"))
@@ -414,6 +422,23 @@ namespace ACFSystem
             if (GUILayout.Button("Generate Roofs"))
             {
                 AutoGenerateRoofsForSelection();
+            }
+            EditorGUILayout.EndVertical();
+
+            GUILayout.Space(10);
+            EditorGUILayout.LabelField("Door Management", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical("box");
+            if (GUILayout.Button("Select All Doors"))
+            {
+                SelectAllDoors();
+            }
+            if (GUILayout.Button("Set All Doors Unlocked"))
+            {
+                SetAllDoorsLockState(false);
+            }
+            if (GUILayout.Button("Set All Doors Locked"))
+            {
+                SetAllDoorsLockState(true);
             }
             EditorGUILayout.EndVertical();
 
@@ -787,6 +812,7 @@ namespace ACFSystem
                     if (ACFCategoryUtility.TryInferCategory(gameObject, enableNameBasedDetection, out string category, out string reason))
                     {
                         categorizedObjects[category].Add(gameObject);
+                        SyncScannedObjectData(gameObject, category);
                         if (enableScanDebugOutput)
                         {
                             scanDebugBuilder.AppendLine($"{gameObject.name} -> {category} ({reason})");
@@ -795,10 +821,10 @@ namespace ACFSystem
                 }
             }
 
+            RepairExistingBlockoutMaterials();
             OrganizeSceneHierarchy(rootObjects);
             ApplyScanPreviewMaterials();
             scanCompleted = true;
-            Debug.Log(BuildCategorySummary("ACF Scan Complete:"));
             if (enableScanDebugOutput && scanDebugBuilder != null)
             {
                 Debug.Log(scanDebugBuilder.ToString());
@@ -853,6 +879,70 @@ namespace ACFSystem
             EditorUtility.DisplayDialog("Auto-Categorization Complete", $"Categorized {categorizedCount} objects based on their names.", "OK");
         }
 
+        private void AssignKeyDataToDetectedObjects()
+        {
+            if (!enableNameBasedDetection)
+            {
+                EditorUtility.DisplayDialog("Name Detection Disabled", "Enable name detection in the Scan tab before assigning key data from object names.", "OK");
+                return;
+            }
+
+            GameObject[] rootObjects = SceneManager.GetActiveScene().GetRootGameObjects();
+            int assignedCount = 0;
+            int manualOnlyCount = 0;
+
+            foreach (GameObject rootObject in rootObjects)
+            {
+                GameObject[] allChildren = rootObject.GetComponentsInChildren<Transform>(true).Select(t => t.gameObject).ToArray();
+                foreach (GameObject gameObject in allChildren)
+                {
+                    if (ShouldSkipFromScan(gameObject))
+                        continue;
+
+                    bool isExistingKey = false;
+                    ACFObjectData existingData = gameObject.GetComponent<ACFObjectData>();
+                    if (existingData != null)
+                        isExistingKey = existingData.category == ACFObjectData.ObjectCategory.Key;
+
+                    bool looksLikeKey = ACFCategoryUtility.TryInferCategoryFromName(gameObject.name, out string inferredCategory) &&
+                                        inferredCategory == ACFCategoryUtility.Key;
+                    if (!isExistingKey && !looksLikeKey)
+                        continue;
+
+                    AssignCategoryToObject(gameObject, ACFCategoryUtility.Key);
+                    assignedCount++;
+
+                    ACFKeyData keyData = gameObject.GetComponent<ACFKeyData>();
+                    if (keyData == null)
+                        continue;
+
+                    bool hasLinkedDoor = false;
+                    ACFDoorData[] doors = Object.FindObjectsByType<ACFDoorData>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    for (int i = 0; i < doors.Length; i++)
+                    {
+                        ACFDoorData door = doors[i];
+                        if (door == null)
+                            continue;
+
+                        if (door.linkedKey == keyData || (!string.IsNullOrWhiteSpace(door.requiredKeyId) && door.requiredKeyId == keyData.keyId))
+                        {
+                            hasLinkedDoor = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasLinkedDoor)
+                        manualOnlyCount++;
+                }
+            }
+
+            ScanScene();
+            EditorUtility.DisplayDialog(
+                "Key Data Assigned",
+                $"Generated or refreshed key data for {assignedCount} object(s).\n\n{manualOnlyCount} key(s) are not linked to a door yet, so they are ready for manual assignment.",
+                "OK");
+        }
+
         private void CreateBlockoutPrefabs()
         {
             string path = "Assets/ACF_Blockouts";
@@ -873,7 +963,6 @@ namespace ACFSystem
             }
 
             AssetDatabase.Refresh();
-            Debug.Log($"Created {createdCount} blockout prefabs");
             EditorUtility.DisplayDialog("Blockout Prefabs Created", $"Successfully created {createdCount} blockout prefabs in {path}", "OK");
         }
 
@@ -892,6 +981,7 @@ namespace ACFSystem
                 blockout.transform.position = objects[i].transform.position;
                 blockout.transform.rotation = objects[i].transform.rotation;
                 blockout.transform.localScale = objects[i].transform.lossyScale;
+                ApplyOpaqueBlockoutMaterial(blockout);
 
                 string prefabPath = $"{path}/{blockout.name}.prefab";
                 PrefabUtility.SaveAsPrefabAsset(blockout, prefabPath);
@@ -904,6 +994,11 @@ namespace ACFSystem
 
         private GameObject LoadFirstBlockoutPrefabForCategory(string category)
         {
+            if (!AssetDatabase.IsValidFolder("Assets/ACF_Blockouts"))
+            {
+                return null;
+            }
+
             string[] guids = AssetDatabase.FindAssets($"{category}_Blockout_ t:Prefab", new[] { "Assets/ACF_Blockouts" });
             if (guids.Length == 0)
             {
@@ -941,6 +1036,7 @@ namespace ACFSystem
             ApplyCategoryToObjectData(data, category);
             data.isBlockout = true;
             EditorUtility.SetDirty(data);
+            ApplyOpaqueBlockoutMaterial(instance);
 
             selectedObjects = new List<GameObject> { instance };
             Selection.activeGameObject = instance;
@@ -961,7 +1057,6 @@ namespace ACFSystem
             Selection.objects = selectedObjects.ToArray();
             UpdatePivotSelection();
             StoreOriginalTransforms();
-            Debug.Log($"Selected {selectedObjects.Count} blockout object(s) from {GetDisplayName(category)}");
         }
 
         private void AutoGenerateWallsForSelection()
@@ -1341,6 +1436,7 @@ namespace ACFSystem
             ApplyCategoryToObjectData(data, ACFCategoryUtility.Wall);
             data.isBlockout = true;
             EditorUtility.SetDirty(data);
+            ApplyOpaqueBlockoutMaterial(wall);
         }
 
         private void CreateGeneratedRoof(string sourceName, Bounds bounds, bool createMaskFloor)
@@ -1362,6 +1458,7 @@ namespace ACFSystem
             data.customCategory = createMaskFloor ? MaskFloorCustomCategory : string.Empty;
             data.isBlockout = true;
             EditorUtility.SetDirty(data);
+            ApplyOpaqueBlockoutMaterial(roof);
         }
 
         private int CreateSegmentedWallSide(Bounds bounds, string sideName, int doorCount, bool horizontalSide, float fixedAxis)
@@ -1438,7 +1535,7 @@ namespace ACFSystem
         {
             GameObject door = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Undo.RegisterCreatedObjectUndo(door, "Generate Door Placeholder");
-            door.name = $"Door_{sideName}";
+            door.name = $"Door_{sideName}_{System.Guid.NewGuid().ToString().Substring(0, 4)}";
 
             float centerY = bounds.center.y + doorOpeningHeight * 0.5f;
             if (horizontalSide)
@@ -1456,6 +1553,50 @@ namespace ACFSystem
             ApplyCategoryToObjectData(data, ACFCategoryUtility.Door);
             data.isBlockout = true;
             EditorUtility.SetDirty(data);
+
+            ACFDoorData doorData = Undo.AddComponent<ACFDoorData>(door);
+            doorData.startsLocked = false;
+            doorData.requiredKeyId = string.Empty;
+            doorData.linkedKey = null;
+            doorData.pushToOpen = true;
+            doorData.autoClose = true;
+            doorData.enableLogs = true;
+            EditorUtility.SetDirty(doorData);
+
+            ApplyOpaqueBlockoutMaterial(door);
+        }
+
+        private void SelectAllDoors()
+        {
+            ACFObjectData[] objects = Object.FindObjectsByType<ACFObjectData>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            selectedObjects = objects
+                .Where(data => data != null && data.isBlockout && data.category == ACFObjectData.ObjectCategory.Door)
+                .Select(data => data.gameObject)
+                .ToList();
+
+            Selection.objects = selectedObjects.ToArray();
+            UpdatePivotSelection();
+            StoreOriginalTransforms();
+        }
+
+        private void SetAllDoorsLockState(bool locked)
+        {
+            ACFDoorData[] doors = Object.FindObjectsByType<ACFDoorData>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < doors.Length; i++)
+            {
+                ACFDoorData door = doors[i];
+                Undo.RecordObject(door, "Set Door Lock State");
+                door.startsLocked = locked;
+                if (!locked)
+                {
+                    door.requiredKeyId = string.Empty;
+                    door.linkedKey = null;
+                }
+
+                EditorUtility.SetDirty(door);
+            }
+
+            EditorUtility.DisplayDialog("Doors Updated", $"Set {doors.Length} doors to {(locked ? "locked" : "unlocked")}.", "OK");
         }
 
         private void LinkSelectedKeyToDoors()
@@ -1670,12 +1811,12 @@ namespace ACFSystem
             if (targetSide <= 1 && movingSide <= 1)
             {
                 offset.z = (targetPlane + signedGap) - movingPlane;
-                offset.x = targetBounds.center.x - movingBounds.center.x;
+                offset.x = GetClosestParallelEdgeOffset(movingBounds.min.x, movingBounds.max.x, targetBounds.min.x, targetBounds.max.x);
             }
             else if (targetSide > 1 && movingSide > 1)
             {
                 offset.x = (targetPlane + signedGap) - movingPlane;
-                offset.z = targetBounds.center.z - movingBounds.center.z;
+                offset.z = GetClosestParallelEdgeOffset(movingBounds.min.z, movingBounds.max.z, targetBounds.min.z, targetBounds.max.z);
             }
             else
             {
@@ -1688,11 +1829,38 @@ namespace ACFSystem
                     offset.x = (targetPlane + signedGap) - movingBounds.center.x;
                 }
 
-                offset.x += targetBounds.center.x - movingBounds.center.x;
-                offset.z += targetBounds.center.z - movingBounds.center.z;
+                offset.x += GetClosestParallelEdgeOffset(movingBounds.min.x, movingBounds.max.x, targetBounds.min.x, targetBounds.max.x);
+                offset.z += GetClosestParallelEdgeOffset(movingBounds.min.z, movingBounds.max.z, targetBounds.min.z, targetBounds.max.z);
             }
 
             return offset;
+        }
+
+        private float GetClosestParallelEdgeOffset(float movingMin, float movingMax, float targetMin, float targetMax)
+        {
+            float[] candidateOffsets =
+            {
+                targetMin - movingMin,
+                targetMax - movingMax,
+                targetMin - movingMax,
+                targetMax - movingMin
+            };
+
+            float bestOffset = candidateOffsets[0];
+            float bestDistance = Mathf.Abs(bestOffset);
+
+            for (int i = 1; i < candidateOffsets.Length; i++)
+            {
+                float candidate = candidateOffsets[i];
+                float distance = Mathf.Abs(candidate);
+                if (distance < bestDistance)
+                {
+                    bestOffset = candidate;
+                    bestDistance = distance;
+                }
+            }
+
+            return bestOffset;
         }
 
         private float GetSideOutwardDirection(int sideIndex)
@@ -2375,11 +2543,12 @@ namespace ACFSystem
 
             foreach (GameObject rootObject in rootObjects)
             {
-                if (rootObject == null ||
-                    rootObject == organizerRoot ||
-                    rootObject.GetComponent<Camera>() != null ||
-                    rootObject.GetComponent<Light>() != null ||
-                    IsCanvasOrUiObject(rootObject))
+                if (rootObject == null || rootObject == organizerRoot || rootObject.GetComponent<Camera>() != null || rootObject.GetComponent<Light>() != null)
+                {
+                    continue;
+                }
+
+                if (IsUiRelatedRoot(rootObject))
                 {
                     continue;
                 }
@@ -2445,31 +2614,45 @@ namespace ACFSystem
                 return false;
             }
 
-            if (gameObject.GetComponent<RectTransform>() != null ||
-                gameObject.GetComponent<Canvas>() != null ||
-                gameObject.GetComponent<CanvasRenderer>() != null ||
-                gameObject.GetComponentInParent<Canvas>(true) != null)
+            if (gameObject.GetComponent<Canvas>() != null ||
+                gameObject.GetComponent<RectTransform>() != null ||
+                gameObject.GetComponent<CanvasRenderer>() != null)
             {
                 return true;
             }
 
-            Component[] components = gameObject.GetComponents<Component>();
-            for (int i = 0; i < components.Length; i++)
+            if (gameObject.GetComponentInParent<Canvas>(true) != null)
             {
-                Component component = components[i];
-                if (component == null)
-                {
-                    continue;
-                }
-
-                System.Type componentType = component.GetType();
-                if (componentType.Namespace == "UnityEngine.UI" || componentType.Namespace == "UnityEngine.EventSystems")
-                {
-                    return true;
-                }
+                return true;
             }
 
             return false;
+        }
+
+        private bool IsUiRelatedRoot(GameObject rootObject)
+        {
+            if (rootObject == null)
+            {
+                return false;
+            }
+
+            if (rootObject.GetComponentInChildren<Canvas>(true) != null)
+            {
+                return true;
+            }
+
+            if (rootObject.GetComponentInChildren<RectTransform>(true) != null)
+            {
+                return true;
+            }
+
+            if (rootObject.GetComponentInChildren<CanvasRenderer>(true) != null)
+            {
+                return true;
+            }
+
+            string name = rootObject.name.ToLowerInvariant();
+            return name.Contains("ui") || name.Contains("hud") || name.Contains("menu") || name.Contains("canvas");
         }
 
         private Transform GetOrCreateCategoryParent(Transform organizerRoot, string category)
@@ -2488,46 +2671,7 @@ namespace ACFSystem
 
         private void ApplyScanPreviewMaterials()
         {
-            EnsureScanPreviewMaterial();
-            scanPreviewMaterial.color = new Color(1f, 1f, 1f, sourcePreviewOpacity);
-
             RestorePreviewMaterials();
-
-            foreach (string category in ACFCategoryUtility.AllCategories)
-            {
-                foreach (GameObject obj in GetObjectsForCategory(category))
-                {
-                    if (obj == null)
-                    {
-                        continue;
-                    }
-
-                    Renderer renderer = obj.GetComponent<Renderer>();
-                    if (renderer == null)
-                    {
-                        continue;
-                    }
-
-                    ACFObjectData objectData = obj.GetComponent<ACFObjectData>();
-                    if (objectData != null && objectData.isBlockout)
-                    {
-                        continue;
-                    }
-
-                    if (!originalPreviewMaterials.ContainsKey(renderer))
-                    {
-                        originalPreviewMaterials[renderer] = renderer.sharedMaterials;
-                    }
-
-                    Material[] previewMaterials = new Material[renderer.sharedMaterials.Length];
-                    for (int i = 0; i < previewMaterials.Length; i++)
-                    {
-                        previewMaterials[i] = scanPreviewMaterial;
-                    }
-
-                    renderer.sharedMaterials = previewMaterials;
-                }
-            }
         }
 
         private void EnsureScanPreviewMaterial()
@@ -2537,10 +2681,14 @@ namespace ACFSystem
                 return;
             }
 
-            Shader shader = Shader.Find("Unlit/Transparent");
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Unlit/Texture");
+            }
             scanPreviewMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
             scanPreviewMaterial.mainTexture = CreateGridPreviewTexture();
-            scanPreviewMaterial.color = new Color(1f, 1f, 1f, sourcePreviewOpacity);
+            scanPreviewMaterial.color = Color.white;
         }
 
         private Texture2D CreateGridPreviewTexture()
@@ -2582,6 +2730,113 @@ namespace ACFSystem
             }
 
             originalPreviewMaterials.Clear();
+        }
+
+        private void RepairExistingBlockoutMaterials()
+        {
+            ACFObjectData[] objects = Object.FindObjectsByType<ACFObjectData>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (ACFObjectData data in objects)
+            {
+                if (data == null || !data.isBlockout)
+                {
+                    continue;
+                }
+
+                ApplyOpaqueBlockoutMaterial(data.gameObject);
+            }
+        }
+
+        private void ApplyOpaqueBlockoutMaterial(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                return;
+            }
+
+            Material blockoutMaterial = GetOrCreateBlockoutMaterial();
+            if (blockoutMaterial == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = gameObject.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0)
+                {
+                    renderer.sharedMaterial = blockoutMaterial;
+                    EditorUtility.SetDirty(renderer);
+                    continue;
+                }
+
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    materials[i] = blockoutMaterial;
+                }
+
+                renderer.sharedMaterials = materials;
+                EditorUtility.SetDirty(renderer);
+            }
+        }
+
+        private Material GetOrCreateBlockoutMaterial()
+        {
+            Material existing = AssetDatabase.LoadAssetAtPath<Material>(BlockoutMaterialPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            if (!AssetDatabase.IsValidFolder(BlockoutMaterialFolder))
+            {
+                AssetDatabase.CreateFolder("Assets/Atlas Cathedral Forge (ACF)", "Generated");
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Universal Render Pipeline/Unlit");
+            }
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+            if (shader == null)
+            {
+                return null;
+            }
+
+            Material material = new Material(shader)
+            {
+                name = "ACF_BlockoutOpaque"
+            };
+
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", new Color(0.72f, 0.72f, 0.72f, 1f));
+            }
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", new Color(0.72f, 0.72f, 0.72f, 1f));
+            }
+            if (material.HasProperty("_Surface"))
+            {
+                material.SetFloat("_Surface", 0f);
+            }
+            if (material.HasProperty("_AlphaClip"))
+            {
+                material.SetFloat("_AlphaClip", 0f);
+            }
+
+            AssetDatabase.CreateAsset(material, BlockoutMaterialPath);
+            AssetDatabase.SaveAssets();
+            return material;
         }
 
         private void StoreOriginalTransforms()
@@ -2726,6 +2981,11 @@ namespace ACFSystem
             return InternalEditorUtility.tags.Contains(category);
         }
 
+        private bool IsConfiguredUnityLayer(string category)
+        {
+            return InternalEditorUtility.layers.Contains(category);
+        }
+
         private void AssignCategoryToSelected(string category)
         {
             if (!ACFCategoryUtility.IsStandardCategory(category))
@@ -2753,7 +3013,6 @@ namespace ACFSystem
             }
 
             Repaint();
-            Debug.Log($"Assigned '{category}' to {currentSelection.Length} selected object(s).");
         }
 
         private void AssignCategoryToObject(GameObject obj, string category, bool setUnityTag = true)
@@ -2768,22 +3027,68 @@ namespace ACFSystem
                 Undo.RecordObject(objectData, "Assign ACF Category");
             }
 
+            objectData.CaptureCurrentUnityMetadata();
             ApplyCategoryToObjectData(objectData, category);
             objectData.customCategory = string.Empty;
-            EditorUtility.SetDirty(objectData);
+
+            string appliedTag = string.Empty;
+            string appliedLayer = string.Empty;
 
             if (setUnityTag && IsConfiguredUnityTag(category))
             {
                 Undo.RecordObject(obj, "Assign ACF Category Tag");
                 obj.tag = category;
-                EditorUtility.SetDirty(obj);
+                appliedTag = category;
             }
+
+            if (IsConfiguredUnityLayer(category))
+            {
+                Undo.RecordObject(obj, "Assign ACF Category Layer");
+                obj.layer = LayerMask.NameToLayer(category);
+                appliedLayer = category;
+            }
+
+            if (!string.IsNullOrEmpty(appliedTag) || !string.IsNullOrEmpty(appliedLayer))
+                EditorUtility.SetDirty(obj);
+
+            objectData.RecordAssignedCategoryMetadata(appliedTag, appliedLayer);
+            EditorUtility.SetDirty(objectData);
+
+            EnsureCategorySpecificComponents(obj, category);
+        }
+
+        private void SyncScannedObjectData(GameObject obj, string category)
+        {
+            if (obj == null)
+                return;
+
+            AssignCategoryToObject(obj, category, true);
         }
 
         private bool TrySuggestCategory(GameObject gameObject, out string category)
         {
             if (enableNameBasedDetection && ACFCategoryUtility.TryInferCategoryFromName(gameObject.name, out category))
             {
+                return true;
+            }
+
+            Renderer renderer = gameObject.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                category = string.Empty;
+                return false;
+            }
+
+            Vector3 scale = gameObject.transform.localScale;
+            if (scale.y > 2f && scale.x < 1.5f && scale.z < 1.5f)
+            {
+                category = ACFCategoryUtility.Wall;
+                return true;
+            }
+
+            if (scale.y < 0.5f && (scale.x > 2f || scale.z > 2f))
+            {
+                category = ACFCategoryUtility.Floor;
                 return true;
             }
 
@@ -2806,6 +3111,101 @@ namespace ACFSystem
                 case ACFCategoryUtility.Ignore: objectData.category = ACFObjectData.ObjectCategory.Ignore; break;
                 default: objectData.category = ACFObjectData.ObjectCategory.Custom; break;
             }
+        }
+
+        private void EnsureCategorySpecificComponents(GameObject obj, string category)
+        {
+            if (obj == null)
+                return;
+
+            if (category != ACFCategoryUtility.Key)
+                return;
+
+            EnsureKeyRuntimeSetup(obj);
+        }
+
+        private void EnsureKeyRuntimeSetup(GameObject obj)
+        {
+            if (obj == null)
+                return;
+
+            ACFKeyData keyData = obj.GetComponent<ACFKeyData>();
+            if (keyData == null)
+                keyData = Undo.AddComponent<ACFKeyData>(obj);
+            else
+                Undo.RecordObject(keyData, "Configure ACF Key Data");
+
+            keyData.AutoConfigureFromObjectName();
+            EditorUtility.SetDirty(keyData);
+
+            Collider existingCollider = obj.GetComponent<Collider>();
+            BoxCollider triggerCollider = existingCollider as BoxCollider;
+            if (triggerCollider == null)
+            {
+                triggerCollider = Undo.AddComponent<BoxCollider>(obj);
+            }
+            else
+            {
+                Undo.RecordObject(triggerCollider, "Configure ACF Key Collider");
+            }
+
+            Bounds localBounds = CalculateLocalKeyBounds(obj);
+            triggerCollider.center = localBounds.center;
+            triggerCollider.size = localBounds.size;
+            triggerCollider.isTrigger = true;
+            EditorUtility.SetDirty(triggerCollider);
+
+            Rigidbody body = obj.GetComponent<Rigidbody>();
+            if (body == null)
+            {
+                body = Undo.AddComponent<Rigidbody>(obj);
+            }
+            else
+            {
+                Undo.RecordObject(body, "Configure ACF Key Rigidbody");
+            }
+
+            body.isKinematic = true;
+            body.useGravity = false;
+            body.constraints = RigidbodyConstraints.FreezeAll;
+            EditorUtility.SetDirty(body);
+
+            ACFKeyPickup pickup = obj.GetComponent<ACFKeyPickup>();
+            if (pickup == null)
+            {
+                pickup = Undo.AddComponent<ACFKeyPickup>(obj);
+            }
+            else
+            {
+                Undo.RecordObject(pickup, "Configure ACF Key Pickup");
+            }
+
+            EditorUtility.SetDirty(pickup);
+            EditorUtility.SetDirty(obj);
+        }
+
+        private Bounds CalculateLocalKeyBounds(GameObject obj)
+        {
+            Renderer[] renderers = obj.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                return new Bounds(Vector3.zero, Vector3.one);
+            }
+
+            Bounds worldBounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                worldBounds.Encapsulate(renderers[i].bounds);
+            }
+
+            Vector3 localCenter = obj.transform.InverseTransformPoint(worldBounds.center);
+            Vector3 localSize = obj.transform.InverseTransformVector(worldBounds.size);
+            localSize = new Vector3(
+                Mathf.Max(0.1f, Mathf.Abs(localSize.x)),
+                Mathf.Max(0.1f, Mathf.Abs(localSize.y)),
+                Mathf.Max(0.1f, Mathf.Abs(localSize.z)));
+
+            return new Bounds(localCenter, localSize);
         }
 
         private void DrawQuickAssignButtons()

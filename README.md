@@ -2,6 +2,8 @@
 
 Atlas Cathedral Forge (ACF) is a Unity editor toolset for fast level blockout, floor-plan snapping, wall and roof generation, object categorization, and final prefab replacement.
 
+The latest update also adds a portable door/key interaction layer so the package can be reused across projects without depending on a specific player controller.
+
 This repository currently contains the completed core ACF workflow:
 
 - `Scan`
@@ -47,6 +49,8 @@ Features:
 - spawn blockout prefabs by category
 - select scene blockouts by category
 - link keys to doors
+- assign key data to detected key objects
+- keep generated blockouts on a shared opaque material
 
 ### 3. Floor
 
@@ -57,6 +61,7 @@ Features:
 - choose a `Main Floor`
 - choose a `Target Floor`
 - snap floor edges together
+- improved edge alignment when snapping floors with different dimensions
 - mark selected floors as `Room`
 - mark selected floors as `Corridor`
 - create `Mask Floor` objects from roof objects for upper-floor work
@@ -70,6 +75,7 @@ Features:
 - per-side door counts
 - shared-edge corridor and room connection handling
 - connected-floor seam detection
+- bulk door selection and lock-state tools
 - optional roof generation
 - optional mask-floor generation instead of roof generation
 
@@ -123,16 +129,32 @@ ACF includes shared generated-object visibility tools across tabs:
 
 These controls affect generated blockout objects only, not hand-placed scene objects.
 
+## Portable Runtime
+
+The package now includes reusable runtime helpers for shared projects:
+
+- `ACFDoorData` with hinge pivots, push detection, obstacle checks, and lock/key support
+- `ACFKeyData` auto-configuration from object names
+- `ACFKeyPickup` with prompt UI and generic collector detection
+- `ACFPlayerKeyRing` for project-agnostic key ownership
+- prompt and debug helpers for door/key testing
+
+These runtime pieces are designed to work without a hard dependency on a game-specific player controller. A project can integrate them with tagged players, `CharacterController`, `Rigidbody`, or a custom setup that carries an `ACFPlayerKeyRing`.
+
 ## Main Scripts
 
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Editor/ACFWindow.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Editor/ACFToolbar.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Editor/ACFObjectDataEditor.cs`
+- `Assets/Atlas Cathedral Forge (ACF)/Script/Editor/ACFDoorDataEditor.cs`
+- `Assets/Atlas Cathedral Forge (ACF)/Script/Editor/ACFKeyDataEditor.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Editor/ACFTagSetup.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Runtime/ACFObjectData.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Runtime/ACFCategoryUtility.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Runtime/ACFKeyData.cs`
 - `Assets/Atlas Cathedral Forge (ACF)/Script/Runtime/ACFDoorData.cs`
+- `Assets/Atlas Cathedral Forge (ACF)/Script/Runtime/ACFKeyPickup.cs`
+- `Assets/Atlas Cathedral Forge (ACF)/Script/Runtime/ACFPlayerKeyRing.cs`
 
 ## Current Status
 
